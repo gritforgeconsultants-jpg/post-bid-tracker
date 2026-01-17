@@ -24,7 +24,7 @@ Interactive web-based checklist for tracking bid submissions and follow-ups with
 
 | File | Description |
 |------|-------------|
-| `bid_tracker.html` | Interactive web-based tracker (main application) |
+| `index.html` | Interactive web-based tracker (main application) |
 | `post_bid_checklist_v2.md` | Printable markdown checklist template |
 | `post_bid_tracking_v2.py` | Python automation scripts |
 | `post_bid_tracking_docs.md` | Documentation and workflow guides |
