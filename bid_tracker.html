@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post-Bid Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 { text-align: center; color: #333; margin-bottom: 20px; }
+    .header-info { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header-info input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+    .header-info label { font-weight: 600; color: #555; display: block; margin-bottom: 4px; }
+    .header-row { display: grid; grid-template-columns: 1fr 2fr; gap: 15px; }
+    section { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    h2 { color: #333; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #eee; font-size: 18px; }
+    h3 { color: #555; margin: 15px 0 10px; font-size: 15px; }
+    .task { display: flex; align-items: center; padding: 10px; border-radius: 6px; margin-bottom: 8px; background: #f9f9f9; transition: all 0.2s; }
+    .task:hover { background: #f0f0f0; }
+    .task.completed { background: #e8f5e9; }
+    .task.completed label { text-decoration: line-through; color: #888; }
+    .task input[type="checkbox"] { width: 20px; height: 20px; margin-right: 12px; cursor: pointer; }
+    .task label { flex: 1; cursor: pointer; }
+    .task input[type="text"], .task input[type="date"] { padding: 6px; border: 1px solid #ddd; border-radius: 4px; margin-left: 10px; }
+    .task input[type="text"] { width: 150px; }
+    .followup-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .followup-table th, .followup-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+    .followup-table th { background: #f5f5f5; font-weight: 600; color: #555; }
+    .followup-table tr.completed { background: #e8f5e9; }
+    .followup-table input[type="date"] { padding: 4px; border: 1px solid #ddd; border-radius: 4px; width: 130px; }
+    .followup-table input[type="text"] { width: 100%; padding: 4px; border: 1px solid #ddd; border-radius: 4px; }
+    .radio-group { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .radio-group label { display: flex; align-items: center; padding: 6px 10px; background: #f5f5f5; border-radius: 16px; cursor: pointer; transition: all 0.2s; font-size: 13px; }
+    .radio-group label:hover { background: #e8e8e8; }
+    .radio-group input:checked + span { font-weight: 600; }
+    .radio-group label.selected { background: #e3f2fd; }
+    .radio-group.outcome label.selected-won { background: #c8e6c9; }
+    .radio-group.outcome label.selected-lost { background: #ffcdd2; }
+    .radio-group.outcome label.selected-no-response { background: #fff3e0; }
+    .radio-group input { margin-right: 5px; }
+    .conditional { display: none; padding: 12px; background: #fafafa; border-radius: 6px; margin-top: 8px; }
+    .conditional.active { display: block; }
+    .conditional .field { margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .conditional .field label { font-weight: 500; min-width: 100px; }
+    .conditional input[type="text"], .conditional input[type="date"] { padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
+    textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit; resize: vertical; min-height: 50px; font-size: 14px; }
+    .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin-bottom: 20px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #4caf50, #8bc34a); transition: width 0.3s; }
+    .progress-text { text-align: center; color: #666; font-size: 14px; margin-bottom: 10px; }
+    .btn-row { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .btn-save { background: #4caf50; color: #fff; }
+    .btn-save:hover { background: #43a047; }
+    .btn-clear { background: #f44336; color: #fff; }
+    .btn-clear:hover { background: #e53935; }
+    .btn-export { background: #2196f3; color: #fff; }
+    .btn-export:hover { background: #1e88e5; }
+    .btn-add { background: #9c27b0; color: #fff; }
+    .btn-add:hover { background: #7b1fa2; }
+    .btn-small { padding: 6px 12px; font-size: 12px; }
+    .btn-remove { background: #ff5722; color: #fff; }
+    .btn-remove:hover { background: #e64a19; }
+
+    /* GC Entry Styles */
+    .gc-entry { border: 2px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #fafafa; }
+    .gc-entry.won { border-color: #4caf50; background: #f1f8e9; }
+    .gc-entry.lost { border-color: #f44336; background: #ffebee; }
+    .gc-entry.no-response { border-color: #ff9800; background: #fff8e1; }
+    .gc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+    .gc-header input { font-size: 16px; font-weight: 600; padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; width: 250px; }
+    .gc-status-badge { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .gc-status-badge.active { background: #fff3e0; color: #e65100; }
+    .gc-status-badge.won { background: #c8e6c9; color: #2e7d32; }
+    .gc-status-badge.lost { background: #ffcdd2; color: #c62828; }
+    .gc-status-badge.no-response { background: #ffe0b2; color: #e65100; }
+    .gc-section { margin-bottom: 12px; }
+    .gc-section-title { font-weight: 600; color: #666; font-size: 13px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .gc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .gc-actions { display: flex; gap: 8px; }
+    .collapse-btn { background: #607d8b; color: #fff; font-size: 11px; padding: 4px 10px; }
+    .collapse-btn:hover { background: #455a64; }
+    .gc-content { transition: all 0.2s; }
+    .gc-content.collapsed { display: none; }
+    .gc-summary { display: none; padding: 10px; background: #fff; border-radius: 4px; margin-top: 10px; }
+    .gc-content.collapsed + .gc-summary { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Post-Bid Tracker</h1>
+
+    <div class="progress-text">Progress: <span id="progressPercent">0%</span></div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="header-info">
+      <div class="header-row">
+        <div><label>Bid #</label><input type="text" id="bidNumber" placeholder="Enter bid number"></div>
+        <div><label>Project</label><input type="text" id="projectName" placeholder="Enter project name"></div>
+      </div>
+    </div>
+
+    <section id="preSubmission">
+      <h2>Pre-Submission</h2>
+      <div class="task" data-task="blocked">
+        <input type="checkbox" id="blocked">
+        <label for="blocked">If blocked: Mark as <code>AWAITING_SEAN_INPUT</code>, email Sean</label>
+        <input type="date" id="blockedDeadline" placeholder="Deadline">
+      </div>
+      <div class="task" data-task="unblocked">
+        <input type="checkbox" id="unblocked">
+        <label for="unblocked">When ready: Mark as <code>READY_TO_SUBMIT</code>, docs ready, portal tested</label>
+      </div>
+    </section>
+
+    <section id="submission">
+      <h2>Submission (Day 0)</h2>
+      <div class="task" data-task="submitted">
+        <input type="checkbox" id="submitted">
+        <label for="submitted">Bid submitted</label>
+        <input type="datetime-local" id="submittedAt">
+      </div>
+      <div class="task" data-task="proof">
+        <input type="checkbox" id="proof">
+        <label for="proof">Proof captured & saved</label>
+        <input type="text" id="proofLocation" placeholder="File location">
+      </div>
+      <div class="task" data-task="platform">
+        <input type="checkbox" id="platform">
+        <label for="platform">Platform:</label>
+        <select id="platformSelect">
+          <option value="">Select...</option>
+          <option value="PlanHub">PlanHub</option>
+          <option value="ConstructConnect">ConstructConnect</option>
+          <option value="Email">Email</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="task" data-task="seanNotified">
+        <input type="checkbox" id="seanNotified">
+        <label for="seanNotified">Sean notified & follow-up schedule created</label>
+      </div>
+    </section>
+
+    <section id="gcSection">
+      <h2>GC Tracking <button class="btn-add btn-small" onclick="addGCEntry()">+ Add GC</button></h2>
+      <div id="gcEntries"></div>
+    </section>
+
+    <section id="closeActions">
+      <h2>Close Actions</h2>
+      <div class="task" data-task="logged">
+        <input type="checkbox" id="logged">
+        <label for="logged">Outcome logged in system</label>
+      </div>
+      <div class="task" data-task="archived">
+        <input type="checkbox" id="archived">
+        <label for="archived">Bid file archived</label>
+      </div>
+      <div class="task" data-task="gcUpdated">
+        <input type="checkbox" id="gcUpdated">
+        <label for="gcUpdated">GC relationship status updated</label>
+      </div>
+      <div class="task" data-task="pricingFeedback">
+        <input type="checkbox" id="pricingFeedback">
+        <label for="pricingFeedback">Pricing feedback captured</label>
+      </div>
+      <div class="task" data-task="postMortem">
+        <input type="checkbox" id="postMortem">
+        <label for="postMortem">Post-mortem completed (if lost)</label>
+      </div>
+    </section>
+
+    <div class="btn-row">
+      <button class="btn-save" onclick="saveData()">Save Progress</button>
+      <button class="btn-export" onclick="exportData()">Export Summary</button>
+      <button class="btn-clear" onclick="clearData()">Clear All</button>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'bidTracker_';
+    let gcCounter = 0;
+
+    function getStorageKey() {
+      const bidNum = document.getElementById('bidNumber').value || 'unsaved';
+      return STORAGE_KEY + bidNum;
+    }
+
+    function createGCEntryHTML(id, gcName = '') {
+      return `
+        <div class="gc-entry" id="gc-${id}" data-gc-id="${id}">
+          <div class="gc-header">
+            <input type="text" class="gc-name" placeholder="Enter GC name" value="${gcName}">
+            <div class="gc-actions">
+              <span class="gc-status-badge active">Active</span>
+              <button class="btn-small collapse-btn" onclick="toggleCollapse(${id})">Collapse</button>
+              <button class="btn-small btn-remove" onclick="removeGCEntry(${id})">Remove</button>
+            </div>
+          </div>
+
+          <div class="gc-content" id="gc-content-${id}">
+            <div class="gc-grid">
+              <div class="gc-section">
+                <div class="gc-section-title">Follow-Up Sequence</div>
+                <table class="followup-table">
+                  <thead>
+                    <tr><th>Day</th><th>Purpose</th><th>Date</th><th>Sent</th><th>Resp</th><th>Notes</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr data-day="2"><td>2</td><td>Receipt</td><td><input type="date" class="scheduled"></td><td><input type="checkbox" class="sent"></td><td><select class="response"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td><td><input type="text" class="notes" placeholder="..."></td></tr>
+                    <tr data-day="7"><td>7</td><td>Status</td><td><input type="date" class="scheduled"></td><td><input type="checkbox" class="sent"></td><td><select class="response"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td><td><input type="text" class="notes" placeholder="..."></td></tr>
+                    <tr data-day="14"><td>14</td><td>Value</td><td><input type="date" class="scheduled"></td><td><input type="checkbox" class="sent"></td><td><select class="response"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td><td><input type="text" class="notes" placeholder="..."></td></tr>
+                    <tr data-day="28"><td>28</td><td>Close</td><td><input type="date" class="scheduled"></td><td><input type="checkbox" class="sent"></td><td><select class="response"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></td><td><input type="text" class="notes" placeholder="..."></td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="gc-section">
+                <div class="gc-section-title">GC Response</div>
+                <div class="radio-group status">
+                  <label><input type="radio" name="gcStatus-${id}" value="REVIEWING"><span>Reviewing</span></label>
+                  <label><input type="radio" name="gcStatus-${id}" value="AWARDED"><span>Awarded</span></label>
+                  <label><input type="radio" name="gcStatus-${id}" value="NEED_REVISION"><span>Revision</span></label>
+                  <label><input type="radio" name="gcStatus-${id}" value="SCOPE_CLARIFICATION"><span>Clarify</span></label>
+                  <label><input type="radio" name="gcStatus-${id}" value="NO_RESPONSE"><span>No Response</span></label>
+                </div>
+                <textarea class="gc-details" placeholder="Response details..."></textarea>
+              </div>
+            </div>
+
+            <div class="gc-section">
+              <div class="gc-section-title">Outcome</div>
+              <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                <div class="radio-group outcome">
+                  <label><input type="radio" name="outcome-${id}" value="WON"><span>WON</span></label>
+                  <label><input type="radio" name="outcome-${id}" value="LOST"><span>LOST</span></label>
+                  <label><input type="radio" name="outcome-${id}" value="NO_RESPONSE"><span>NO RESPONSE</span></label>
+                </div>
+                <div><label>Close Date: <input type="date" class="close-date"></label></div>
+              </div>
+
+              <div class="conditional won-fields">
+                <div class="field"><label>Award:</label> $<input type="text" class="award-amount" style="width:100px;"></div>
+                <div class="field"><label>Award Date:</label> <input type="date" class="award-date"></div>
+                <div class="field"><label>Start Date:</label> <input type="date" class="start-date"></div>
+                <div class="field"><label>Scope Changes:</label> <input type="text" class="scope-changes" style="width:200px;"></div>
+              </div>
+
+              <div class="conditional lost-fields">
+                <div class="field">
+                  <label>Reason:</label>
+                  <div class="radio-group" style="display: inline-flex;">
+                    <label><input type="radio" name="lostReason-${id}" value="Price"><span>Price</span></label>
+                    <label><input type="radio" name="lostReason-${id}" value="Scope"><span>Scope</span></label>
+                    <label><input type="radio" name="lostReason-${id}" value="Schedule"><span>Schedule</span></label>
+                    <label><input type="radio" name="lostReason-${id}" value="Relationship"><span>Relationship</span></label>
+                    <label><input type="radio" name="lostReason-${id}" value="Unknown"><span>Unknown</span></label>
+                  </div>
+                </div>
+                <div class="field"><label>Winner:</label> <input type="text" class="winning-sub" style="width:150px;"></div>
+                <div class="field"><label>Their Price:</label> $<input type="text" class="winning-price" style="width:100px;"></div>
+                <div class="field"><label>Gap:</label> $<input type="text" class="price-gap" style="width:100px;"></div>
+              </div>
+
+              <div class="conditional no-response-fields">
+                <div class="field"><label>Days Since:</label> <input type="text" class="days-since" style="width:60px;"></div>
+                <div class="field"><label>All Follow-ups:</label> <input type="checkbox" class="all-followups"> Yes</div>
+              </div>
+            </div>
+
+            <div class="gc-section">
+              <div class="gc-section-title">Lessons Learned</div>
+              <textarea class="lessons-learned" placeholder="What did we learn from this GC?"></textarea>
+            </div>
+          </div>
+
+          <div class="gc-summary" id="gc-summary-${id}"></div>
+        </div>
+      `;
+    }
+
+    function addGCEntry(gcName = '') {
+      const id = gcCounter++;
+      const container = document.getElementById('gcEntries');
+      container.insertAdjacentHTML('beforeend', createGCEntryHTML(id, gcName));
+
+      const entry = document.getElementById(`gc-${id}`);
+
+      // Setup outcome radio listeners
+      entry.querySelectorAll(`input[name="outcome-${id}"]`).forEach(radio => {
+        radio.addEventListener('change', function() {
+          entry.querySelectorAll('.conditional').forEach(el => el.classList.remove('active'));
+          const target = { 'WON': 'won-fields', 'LOST': 'lost-fields', 'NO_RESPONSE': 'no-response-fields' }[this.value];
+          if (target) entry.querySelector('.' + target).classList.add('active');
+          updateGCStyle(id);
+          updateRadioStyles();
+          updateProgress();
+        });
+      });
+
+      // Setup checkbox listeners
+      entry.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener('change', () => { updateProgress(); updateTaskStyles(); });
+      });
+
+      // Setup radio style listeners
+      entry.querySelectorAll('.radio-group input').forEach(radio => {
+        radio.addEventListener('change', updateRadioStyles);
+      });
+
+      // Auto-schedule followups when submission date changes
+      autoScheduleForGC(id);
+
+      updateProgress();
+      return id;
+    }
+
+    function removeGCEntry(id) {
+      if (confirm('Remove this GC entry?')) {
+        document.getElementById(`gc-${id}`).remove();
+        updateProgress();
+      }
+    }
+
+    function toggleCollapse(id) {
+      const content = document.getElementById(`gc-content-${id}`);
+      const btn = document.querySelector(`#gc-${id} .collapse-btn`);
+      const summary = document.getElementById(`gc-summary-${id}`);
+
+      if (content.classList.contains('collapsed')) {
+        content.classList.remove('collapsed');
+        btn.textContent = 'Collapse';
+      } else {
+        content.classList.add('collapsed');
+        btn.textContent = 'Expand';
+        // Update summary
+        const gcData = collectGCData(id);
+        summary.innerHTML = `<strong>${gcData.name || 'Unnamed GC'}</strong> | Status: ${gcData.gcStatus || 'Pending'} | Outcome: ${gcData.outcome || 'TBD'} | Follow-ups: ${gcData.followups.filter(f => f.sent).length}/4 sent`;
+      }
+    }
+
+    function updateGCStyle(id) {
+      const entry = document.getElementById(`gc-${id}`);
+      const outcome = entry.querySelector(`input[name="outcome-${id}"]:checked`)?.value;
+      const badge = entry.querySelector('.gc-status-badge');
+
+      entry.classList.remove('won', 'lost', 'no-response');
+      badge.classList.remove('won', 'lost', 'no-response', 'active');
+
+      if (outcome === 'WON') {
+        entry.classList.add('won');
+        badge.classList.add('won');
+        badge.textContent = 'Won';
+      } else if (outcome === 'LOST') {
+        entry.classList.add('lost');
+        badge.classList.add('lost');
+        badge.textContent = 'Lost';
+      } else if (outcome === 'NO_RESPONSE') {
+        entry.classList.add('no-response');
+        badge.classList.add('no-response');
+        badge.textContent = 'No Response';
+      } else {
+        badge.classList.add('active');
+        badge.textContent = 'Active';
+      }
+    }
+
+    function autoScheduleForGC(gcId) {
+      const submittedAt = document.getElementById('submittedAt').value;
+      if (!submittedAt) return;
+
+      const entry = document.getElementById(`gc-${gcId}`);
+      if (!entry) return;
+
+      const baseDate = new Date(submittedAt);
+      [2, 7, 14, 28].forEach(day => {
+        const row = entry.querySelector(`tr[data-day="${day}"]`);
+        const input = row.querySelector('.scheduled');
+        if (!input.value) {
+          const d = new Date(baseDate);
+          d.setDate(d.getDate() + day);
+          input.value = d.toISOString().split('T')[0];
+        }
+      });
+    }
+
+    function autoScheduleAllGCs() {
+      document.querySelectorAll('.gc-entry').forEach(entry => {
+        const id = entry.dataset.gcId;
+        autoScheduleForGC(id);
+      });
+    }
+
+    document.getElementById('submittedAt').addEventListener('change', autoScheduleAllGCs);
+
+    function updateProgress() {
+      const checkboxes = document.querySelectorAll('.task input[type="checkbox"], .followup-table .sent');
+      const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+      const total = checkboxes.length;
+      const percent = total > 0 ? Math.round((checked / total) * 100) : 0;
+      document.getElementById('progressPercent').textContent = percent + '%';
+      document.getElementById('progressFill').style.width = percent + '%';
+    }
+
+    function updateTaskStyles() {
+      document.querySelectorAll('.task').forEach(task => {
+        const cb = task.querySelector('input[type="checkbox"]');
+        task.classList.toggle('completed', cb && cb.checked);
+      });
+      document.querySelectorAll('.followup-table tbody tr').forEach(row => {
+        const sent = row.querySelector('.sent');
+        row.classList.toggle('completed', sent && sent.checked);
+      });
+    }
+
+    function updateRadioStyles() {
+      document.querySelectorAll('.radio-group label').forEach(label => {
+        label.classList.remove('selected', 'selected-won', 'selected-lost', 'selected-no-response');
+        const input = label.querySelector('input');
+        if (input && input.checked) {
+          if (label.closest('.outcome')) {
+            label.classList.add('selected-' + input.value.toLowerCase().replace('_', '-'));
+          } else {
+            label.classList.add('selected');
+          }
+        }
+      });
+    }
+
+    document.querySelectorAll('#preSubmission input[type="checkbox"], #submission input[type="checkbox"], #closeActions input[type="checkbox"]').forEach(cb => {
+      cb.addEventListener('change', () => { updateProgress(); updateTaskStyles(); });
+    });
+
+    function collectGCData(id) {
+      const entry = document.getElementById(`gc-${id}`);
+      if (!entry) return null;
+
+      return {
+        id,
+        name: entry.querySelector('.gc-name').value,
+        followups: [2, 7, 14, 28].map(day => {
+          const row = entry.querySelector(`tr[data-day="${day}"]`);
+          return {
+            day,
+            scheduled: row.querySelector('.scheduled').value,
+            sent: row.querySelector('.sent').checked,
+            response: row.querySelector('.response').value,
+            notes: row.querySelector('.notes').value
+          };
+        }),
+        gcStatus: entry.querySelector(`input[name="gcStatus-${id}"]:checked`)?.value || '',
+        gcDetails: entry.querySelector('.gc-details').value,
+        outcome: entry.querySelector(`input[name="outcome-${id}"]:checked`)?.value || '',
+        closeDate: entry.querySelector('.close-date').value,
+        won: {
+          awardAmount: entry.querySelector('.award-amount').value,
+          awardDate: entry.querySelector('.award-date').value,
+          startDate: entry.querySelector('.start-date').value,
+          scopeChanges: entry.querySelector('.scope-changes').value
+        },
+        lost: {
+          reason: entry.querySelector(`input[name="lostReason-${id}"]:checked`)?.value || '',
+          winningSub: entry.querySelector('.winning-sub').value,
+          winningPrice: entry.querySelector('.winning-price').value,
+          priceGap: entry.querySelector('.price-gap').value
+        },
+        noResponse: {
+          daysSince: entry.querySelector('.days-since').value,
+          allFollowupsSent: entry.querySelector('.all-followups').checked
+        },
+        lessonsLearned: entry.querySelector('.lessons-learned').value
+      };
+    }
+
+    function collectData() {
+      const gcIds = Array.from(document.querySelectorAll('.gc-entry')).map(el => el.dataset.gcId);
+
+      return {
+        bidNumber: document.getElementById('bidNumber').value,
+        projectName: document.getElementById('projectName').value,
+        preSubmission: {
+          blocked: document.getElementById('blocked').checked,
+          blockedDeadline: document.getElementById('blockedDeadline').value,
+          unblocked: document.getElementById('unblocked').checked
+        },
+        submission: {
+          submitted: document.getElementById('submitted').checked,
+          submittedAt: document.getElementById('submittedAt').value,
+          proof: document.getElementById('proof').checked,
+          proofLocation: document.getElementById('proofLocation').value,
+          platform: document.getElementById('platform').checked,
+          platformSelect: document.getElementById('platformSelect').value,
+          seanNotified: document.getElementById('seanNotified').checked
+        },
+        gcEntries: gcIds.map(id => collectGCData(id)).filter(Boolean),
+        closeActions: {
+          logged: document.getElementById('logged').checked,
+          archived: document.getElementById('archived').checked,
+          gcUpdated: document.getElementById('gcUpdated').checked,
+          pricingFeedback: document.getElementById('pricingFeedback').checked,
+          postMortem: document.getElementById('postMortem').checked
+        }
+      };
+    }
+
+    function loadGCData(gcData) {
+      const id = addGCEntry(gcData.name);
+      const entry = document.getElementById(`gc-${id}`);
+
+      gcData.followups.forEach(fu => {
+        const row = entry.querySelector(`tr[data-day="${fu.day}"]`);
+        if (row) {
+          row.querySelector('.scheduled').value = fu.scheduled || '';
+          row.querySelector('.sent').checked = fu.sent;
+          row.querySelector('.response').value = fu.response || '';
+          row.querySelector('.notes').value = fu.notes || '';
+        }
+      });
+
+      if (gcData.gcStatus) {
+        const radio = entry.querySelector(`input[name="gcStatus-${id}"][value="${gcData.gcStatus}"]`);
+        if (radio) radio.checked = true;
+      }
+      entry.querySelector('.gc-details').value = gcData.gcDetails || '';
+
+      if (gcData.outcome) {
+        const radio = entry.querySelector(`input[name="outcome-${id}"][value="${gcData.outcome}"]`);
+        if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change')); }
+      }
+      entry.querySelector('.close-date').value = gcData.closeDate || '';
+
+      if (gcData.won) {
+        entry.querySelector('.award-amount').value = gcData.won.awardAmount || '';
+        entry.querySelector('.award-date').value = gcData.won.awardDate || '';
+        entry.querySelector('.start-date').value = gcData.won.startDate || '';
+        entry.querySelector('.scope-changes').value = gcData.won.scopeChanges || '';
+      }
+
+      if (gcData.lost) {
+        if (gcData.lost.reason) {
+          const radio = entry.querySelector(`input[name="lostReason-${id}"][value="${gcData.lost.reason}"]`);
+          if (radio) radio.checked = true;
+        }
+        entry.querySelector('.winning-sub').value = gcData.lost.winningSub || '';
+        entry.querySelector('.winning-price').value = gcData.lost.winningPrice || '';
+        entry.querySelector('.price-gap').value = gcData.lost.priceGap || '';
+      }
+
+      if (gcData.noResponse) {
+        entry.querySelector('.days-since').value = gcData.noResponse.daysSince || '';
+        entry.querySelector('.all-followups').checked = gcData.noResponse.allFollowupsSent;
+      }
+
+      entry.querySelector('.lessons-learned').value = gcData.lessonsLearned || '';
+
+      updateGCStyle(id);
+    }
+
+    function loadData(data) {
+      if (!data) return;
+
+      document.getElementById('bidNumber').value = data.bidNumber || '';
+      document.getElementById('projectName').value = data.projectName || '';
+
+      if (data.preSubmission) {
+        document.getElementById('blocked').checked = data.preSubmission.blocked;
+        document.getElementById('blockedDeadline').value = data.preSubmission.blockedDeadline || '';
+        document.getElementById('unblocked').checked = data.preSubmission.unblocked;
+      }
+
+      if (data.submission) {
+        document.getElementById('submitted').checked = data.submission.submitted;
+        document.getElementById('submittedAt').value = data.submission.submittedAt || '';
+        document.getElementById('proof').checked = data.submission.proof;
+        document.getElementById('proofLocation').value = data.submission.proofLocation || '';
+        document.getElementById('platform').checked = data.submission.platform;
+        document.getElementById('platformSelect').value = data.submission.platformSelect || '';
+        document.getElementById('seanNotified').checked = data.submission.seanNotified;
+      }
+
+      // Clear existing GC entries and load saved ones
+      document.getElementById('gcEntries').innerHTML = '';
+      gcCounter = 0;
+      if (data.gcEntries && data.gcEntries.length > 0) {
+        data.gcEntries.forEach(gcData => loadGCData(gcData));
+      }
+
+      if (data.closeActions) {
+        document.getElementById('logged').checked = data.closeActions.logged;
+        document.getElementById('archived').checked = data.closeActions.archived;
+        document.getElementById('gcUpdated').checked = data.closeActions.gcUpdated;
+        document.getElementById('pricingFeedback').checked = data.closeActions.pricingFeedback;
+        document.getElementById('postMortem').checked = data.closeActions.postMortem;
+      }
+
+      updateProgress();
+      updateTaskStyles();
+      updateRadioStyles();
+    }
+
+    function saveData() {
+      const data = collectData();
+      localStorage.setItem(getStorageKey(), JSON.stringify(data));
+      alert('Progress saved!');
+    }
+
+    function clearData() {
+      if (confirm('Clear all data? This cannot be undone.')) {
+        localStorage.removeItem(getStorageKey());
+        location.reload();
+      }
+    }
+
+    function exportData() {
+      const data = collectData();
+      let text = `POST-BID SUMMARY\n${'='.repeat(60)}\n\n`;
+      text += `Bid #: ${data.bidNumber}\nProject: ${data.projectName}\n\n`;
+      text += `SUBMISSION\n${'-'.repeat(40)}\n`;
+      text += `Submitted: ${data.submission.submittedAt || 'N/A'}\nPlatform: ${data.submission.platformSelect || 'N/A'}\n\n`;
+
+      text += `GC ENTRIES (${data.gcEntries.length})\n${'='.repeat(60)}\n\n`;
+
+      data.gcEntries.forEach((gc, i) => {
+        text += `--- ${gc.name || 'Unnamed GC'} ---\n`;
+        text += `Status: ${gc.gcStatus || 'Pending'} | Outcome: ${gc.outcome || 'TBD'}\n`;
+        text += `Follow-ups:\n`;
+        gc.followups.forEach(fu => {
+          text += `  Day ${fu.day}: ${fu.sent ? 'SENT' : 'pending'} | Response: ${fu.response || '-'} | ${fu.notes}\n`;
+        });
+        if (gc.outcome === 'WON') {
+          text += `Award: $${gc.won.awardAmount} | Start: ${gc.won.startDate}\n`;
+        } else if (gc.outcome === 'LOST') {
+          text += `Reason: ${gc.lost.reason} | Winner: ${gc.lost.winningSub} @ $${gc.lost.winningPrice}\n`;
+        }
+        if (gc.lessonsLearned) {
+          text += `Lessons: ${gc.lessonsLearned}\n`;
+        }
+        text += '\n';
+      });
+
+      const blob = new Blob([text], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `bid_${data.bidNumber || 'export'}_summary.txt`;
+      a.click();
+    }
+
+    // Auto-load on bid number change
+    document.getElementById('bidNumber').addEventListener('blur', function() {
+      const saved = localStorage.getItem(getStorageKey());
+      if (saved && confirm('Found saved data for this bid. Load it?')) {
+        loadData(JSON.parse(saved));
+      }
+    });
+
+    // Initialize with one GC entry
+    addGCEntry();
+    updateProgress();
+  </script>
+</body>
+</html>
