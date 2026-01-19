@@ -174,17 +174,71 @@
     <div class="btn-row">
       <button class="btn-save" onclick="saveData()">Save Progress</button>
       <button class="btn-export" onclick="exportData()">Export Summary</button>
+      <button style="background:#9c27b0;color:#fff;" onclick="showSavedBids()">Load Saved Bid</button>
       <button class="btn-clear" onclick="clearData()">Clear All</button>
+    </div>
+    <div id="savedBidsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+      <div style="background:#fff;padding:20px;border-radius:8px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;">
+        <h3 style="margin-bottom:15px;">Saved Bids</h3>
+        <div id="savedBidsList"></div>
+        <button onclick="closeSavedBids()" style="margin-top:15px;padding:8px 16px;background:#666;color:#fff;border:none;border-radius:4px;cursor:pointer;">Close</button>
+      </div>
     </div>
   </div>
 
   <script>
     const STORAGE_KEY = 'bidTracker_';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbw5cY7V4caQZIfkK_HPBP55GuJL_rsqHLxTx9LCMtFX1hWTJoTJjKvKtXO35LQAFzqT/exec';
     let gcCounter = 0;
+    let isSaving = false;
 
     function getStorageKey() {
       const bidNum = document.getElementById('bidNumber').value || 'unsaved';
       return STORAGE_KEY + bidNum;
+    }
+
+    // Cloud storage functions
+    async function saveToCloud(data) {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'save', data: data })
+        });
+        return true;
+      } catch (error) {
+        console.error('Cloud save failed:', error);
+        return false;
+      }
+    }
+
+    async function loadFromCloud(bidNumber) {
+      try {
+        const response = await fetch(`${API_URL}?action=get&bidNumber=${encodeURIComponent(bidNumber)}`);
+        const result = await response.json();
+        if (result.success) {
+          return result.data;
+        }
+        return null;
+      } catch (error) {
+        console.error('Cloud load failed:', error);
+        return null;
+      }
+    }
+
+    async function listBidsFromCloud() {
+      try {
+        const response = await fetch(`${API_URL}?action=list`);
+        const result = await response.json();
+        if (result.success) {
+          return result.bids;
+        }
+        return [];
+      } catch (error) {
+        console.error('Cloud list failed:', error);
+        return [];
+      }
     }
 
     function createGCEntryHTML(id, gcName = '') {
@@ -599,10 +653,30 @@
       updateRadioStyles();
     }
 
-    function saveData() {
+    async function saveData() {
+      if (isSaving) return;
+      isSaving = true;
+
       const data = collectData();
+      const saveBtn = document.querySelector('.btn-save');
+      saveBtn.textContent = 'Saving...';
+      saveBtn.disabled = true;
+
+      // Save to localStorage as backup
       localStorage.setItem(getStorageKey(), JSON.stringify(data));
-      alert('Progress saved!');
+
+      // Save to Google Sheets
+      const cloudSuccess = await saveToCloud(data);
+
+      saveBtn.textContent = 'Save Progress';
+      saveBtn.disabled = false;
+      isSaving = false;
+
+      if (cloudSuccess) {
+        alert('Saved to Google Sheets!');
+      } else {
+        alert('Saved locally. Cloud sync failed - check your connection.');
+      }
     }
 
     function clearData() {
@@ -647,12 +721,67 @@
     }
 
     // Auto-load on bid number change
-    document.getElementById('bidNumber').addEventListener('blur', function() {
+    document.getElementById('bidNumber').addEventListener('blur', async function() {
+      const bidNumber = this.value;
+      if (!bidNumber) return;
+
+      // Try cloud first
+      const cloudData = await loadFromCloud(bidNumber);
+      if (cloudData) {
+        if (confirm('Found saved data in Google Sheets. Load it?')) {
+          loadData(cloudData);
+          return;
+        }
+      }
+
+      // Fall back to localStorage
       const saved = localStorage.getItem(getStorageKey());
-      if (saved && confirm('Found saved data for this bid. Load it?')) {
+      if (saved && confirm('Found locally saved data for this bid. Load it?')) {
         loadData(JSON.parse(saved));
       }
     });
+
+    // Saved bids modal
+    async function showSavedBids() {
+      const modal = document.getElementById('savedBidsModal');
+      const list = document.getElementById('savedBidsList');
+      list.innerHTML = '<p>Loading...</p>';
+      modal.style.display = 'flex';
+
+      const bids = await listBidsFromCloud();
+
+      if (bids.length === 0) {
+        list.innerHTML = '<p style="color:#666;">No saved bids found.</p>';
+        return;
+      }
+
+      list.innerHTML = bids.map(bid => `
+        <div style="padding:10px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px;cursor:pointer;transition:background 0.2s;"
+             onmouseover="this.style.background='#f5f5f5'"
+             onmouseout="this.style.background='#fff'"
+             onclick="loadBidFromList('${bid.bidNumber}')">
+          <strong>${bid.bidNumber}</strong> - ${bid.projectName || 'Unnamed Project'}
+          <div style="font-size:12px;color:#888;">Updated: ${new Date(bid.updatedAt).toLocaleDateString()}</div>
+        </div>
+      `).join('');
+    }
+
+    function closeSavedBids() {
+      document.getElementById('savedBidsModal').style.display = 'none';
+    }
+
+    async function loadBidFromList(bidNumber) {
+      closeSavedBids();
+      const data = await loadFromCloud(bidNumber);
+      if (data) {
+        // Clear existing GC entries
+        document.getElementById('gcEntries').innerHTML = '';
+        gcCounter = 0;
+        loadData(data);
+      } else {
+        alert('Failed to load bid data.');
+      }
+    }
 
     // Initialize with one GC entry
     addGCEntry();
